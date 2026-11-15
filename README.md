@@ -14,50 +14,42 @@ that stop a bad load, and a cost limit on every piece.
 ## Architecture
 
 ```mermaid
-flowchart LR
-    api[("OpenFEMA API<br/>NFIP claims, public")]
-
-    subgraph s1["1 · Ingest"]
-        dl["download_claims.py<br/>Python, paged by year of loss<br/>81,000 rows a minute"]
+flowchart TB
+    subgraph r1["1 · Ingest"]
+        direction LR
+        api[("<b>OpenFEMA API</b><br/>public flood<br/>insurance claims")]
+        dl["<b>download_claims.py</b><br/>Python, paged by year<br/>81,000 rows a minute"]
+        raw[("<b>S3 raw</b><br/>gzipped JSON Lines<br/>1,022,329 claims · 91 MB")]
+        api --> dl --> raw
     end
 
-    subgraph s2["2 · Lake on S3"]
-        raw[("raw<br/>JSON Lines, gzipped<br/>1,022,329 claims, 91 MB")]
-        cur[("curated<br/>Parquet by year_of_loss<br/>18 files, 38 MB")]
+    subgraph r2["2 · Clean and serve"]
+        direction LR
+        glue["<b>Glue Spark job</b><br/>typed, deduplicated<br/>140 s · about $0.03 a run"]
+        cur[("<b>S3 curated</b><br/>Parquet by year of loss<br/>18 files · 38 MB")]
+        ath["<b>Athena</b><br/>table nfip_claims<br/>1 GB scan cap per query"]
+        glue --> cur --> ath
     end
 
-    subgraph s3["3 · Clean"]
-        glue["Glue Spark job<br/>type, dedupe, null bad dates<br/>140 s, about $0.03"]
+    subgraph r3["3 · Ask in plain English"]
+        direction LR
+        guard{{"<b>SQL guard</b><br/>SELECT only, one table,<br/>200-row cap"}}
+        agent["<b>Claude on Bedrock</b><br/>agent.py writes the SQL<br/>one tool: run_sql"]
+        you(["<b>You</b><br/>question in,<br/>answer and SQL out"])
+        guard <-- "SQL · rows" --> agent
+        agent <--> you
     end
 
-    subgraph s4["4 · Serve"]
-        cat["Glue Data Catalog<br/>table nfip_claims<br/>partition projection"]
-        ath["Athena<br/>1 GB scan cap per query"]
+    subgraph r4["Planned"]
+        direction LR
+        air["<b>Airflow DAG</b><br/>schedule steps 1 and 2"]
+        dbt["<b>dbt on Athena</b><br/>models and tests"]
+        air ~~~ dbt
     end
 
-    subgraph s5["5 · Ask in plain English"]
-        q(["Question"])
-        agent["agent.py<br/>Claude on Amazon Bedrock<br/>one tool: run_sql"]
-        guard{{"sql_guard.py<br/>SELECT only, one table,<br/>200 rows"}}
-        ans(["Answer, with the SQL it ran"])
-    end
-
-    subgraph s6["Planned"]
-        dbt["dbt models and tests"]
-        air["Airflow DAG"]
-    end
-
-    api --> dl --> raw --> glue --> cur
-    cur --> cat --> ath
-    q --> agent
-    agent -- "SQL" --> guard
-    guard -- "checked SQL" --> ath
-    ath -- "rows" --> agent
-    agent --> ans
-    ath -.-> dbt
-    air -.-> dl
-    air -.-> glue
-    air -.-> dbt
+    r1 --> r2
+    r2 <-- "checked SQL in · rows out" --> r3
+    r3 ~~~ r4
 
     classDef source fill:#dcfce7,stroke:#16a34a,color:#052e16
     classDef compute fill:#fef3c7,stroke:#d97706,color:#451a03
@@ -66,21 +58,21 @@ flowchart LR
     classDef guardrail fill:#fee2e2,stroke:#dc2626,color:#450a0a
     classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray: 5 4
 
-    class api,q,ans source
+    class api,you source
     class dl,glue compute
-    class raw,cur,cat,ath store
+    class raw,cur,ath store
     class agent ai
     class guard guardrail
-    class dbt,air planned
+    class air,dbt planned
 ```
 
 Green is what goes in and comes out, amber is compute, blue is storage and
 query, purple is the model, red is the check the model cannot bypass, and
 dashed grey is not built yet. The numbers are from the first full run.
 
-Everything in blue and amber is created by Terraform (22 resources). GitHub
-Actions runs the unit tests, `terraform fmt` and `terraform validate` on every
-push.
+The S3 buckets, the Glue job, and the Athena table and workgroup are created by
+Terraform (22 resources). GitHub Actions runs the unit tests, `terraform fmt`
+and `terraform validate` on every push.
 
 ## Status
 
