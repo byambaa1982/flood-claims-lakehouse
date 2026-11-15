@@ -3,7 +3,9 @@
 A small, end-to-end data lakehouse on AWS, built on public flood insurance
 claims. It takes about one million claims from FEMA's National Flood Insurance
 Program, lands them in S3, cleans them with a Glue Spark job, models them with
-dbt on Athena, and runs the whole thing from one Airflow DAG.
+dbt on Athena, and runs the whole thing from one Airflow DAG. On top sits a
+question assistant: ask in plain English, and Claude on Amazon Bedrock writes
+the SQL, runs it on Athena and answers with the figures.
 
 This is a personal project. I built it to show how I put a pipeline together
 on AWS: infrastructure as code, tested transformations, data quality checks
@@ -28,6 +30,15 @@ Marts             loss by state and year, paid against property value
      ^
      |
 Airflow DAG       ingest -> Glue job -> dbt run -> dbt test               [planned]
+
+Question in English
+     |
+     |  ai/agent.py                    (Claude on Bedrock, one tool: run_sql)
+     v
+ai/sql_guard.py   read-only check, one table, row cap
+     |
+     v
+Athena  ->  rows  ->  Claude  ->  answer, with the SQL it ran
 ```
 
 ## Status
@@ -39,6 +50,7 @@ Airflow DAG       ingest -> Glue job -> dbt run -> dbt test               [plann
 | Terraform for S3, Glue and Athena | Working. Applied; 22 resources |
 | Glue job run on AWS | Working. Full dataset cleaned to Parquet |
 | Athena table over the curated data | Working. Row counts checked against the source |
+| Question assistant (Claude on Bedrock, text to SQL) | Working. 10 of 10 on the evaluation set |
 | Lake Formation permissions | Planned |
 | dbt models and tests on Athena | Planned |
 | Airflow DAG | Planned |
@@ -66,6 +78,55 @@ The first Glue run failed. A small number of claims carry a placeholder
 construction date centuries in the past, which Spark will not write to Parquet.
 The fix is a cleaning rule that turns any date before 1800 into null, with a
 unit test for it.
+
+## Ask the data in plain English
+
+```bash
+python -m ai.ask "Which three states had the highest total claims paid in 2017?"
+```
+
+Claude gets the table's schema and a single tool, `run_sql`. It writes a
+query, the code checks and runs it, and Claude reads the rows and answers. The
+answer comes back with every query that produced it, so the work can be
+checked.
+
+The model is not trusted to behave. `ai/sql_guard.py` checks each statement
+before it reaches Athena:
+
+- one statement only, and it must be a SELECT
+- no write or admin keywords (insert, drop, alter and so on)
+- only the claims table may be read
+- results are capped at 200 rows
+
+The Athena workgroup adds its own cap of 1 GB scanned per query, and the agent
+stops after six queries per question. The guard has 15 unit tests.
+
+### Evaluation
+
+`python -m ai.eval` asks ten questions. Each has a hand-written SQL statement
+that returns the true answer, and the agent passes a question when that value
+appears in its reply (numbers within 0.5%).
+
+| Run of 15 November 2026 | |
+|---|---|
+| Model | Claude Sonnet 4.6 on Amazon Bedrock |
+| Passed | 10 of 10 |
+| Queries run | 10, one per question |
+| Tokens | 27,315 input, 1,342 output: about $0.10 at $3 and $15 per million |
+| Athena | 26.9 MB scanned in total |
+
+The questions, answers and queries are in `ai/eval_results.json`.
+
+What this does and does not show: the ten questions are single-table
+aggregations, the kind this table is good for, and I wrote them. It shows the
+loop and the guard work and that the schema description is enough for the model
+to write correct SQL. It is not a benchmark. Three further checks by hand
+behaved as intended: asked what a FEMA code means, it gave the count and said
+it does not have the code's meaning; asked to delete rows, it declined; asked
+for Miami home prices, it said the table does not hold that.
+
+The first trial answer added hurricane names from the model's own knowledge.
+The prompt now tells it to report only what its queries returned.
 
 ## The data
 
@@ -95,6 +156,9 @@ python glue_jobs/clean_claims.py \
 
 pytest -q tests
 ```
+
+The question assistant needs AWS credentials and access to an Anthropic model
+on Bedrock. Set `BEDROCK_MODEL_ID` to use a model other than the default.
 
 On Windows, Spark needs a `winutils.exe` and `hadoop.dll` that match its
 Hadoop version before it can read and write local files. The tests do not

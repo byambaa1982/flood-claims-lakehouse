@@ -1,0 +1,130 @@
+{
+  "model": "us.anthropic.claude-sonnet-4-6",
+  "passed": 10,
+  "total": 10,
+  "input_tokens": 27315,
+  "output_tokens": 1342,
+  "bytes_scanned": 26945295,
+  "results": [
+    {
+      "question": "How many flood insurance claims are in the data in total?",
+      "truth": "1022329",
+      "passed": true,
+      "answer": "There are 1,022,329 flood insurance claims in total across the entire dataset.",
+      "queries": [
+        "SELECT COUNT(*) AS total_claims FROM nfip_claims"
+      ],
+      "input_tokens": 2682,
+      "output_tokens": 89,
+      "bytes_scanned": 0
+    },
+    {
+      "question": "How many claims had a date of loss in 2017?",
+      "truth": "145681",
+      "passed": true,
+      "answer": "There were 145,681 claims with a date of loss in 2017.",
+      "queries": [
+        "SELECT COUNT(*) AS claim_count FROM nfip_claims WHERE year_of_loss = 2017"
+      ],
+      "input_tokens": 2693,
+      "output_tokens": 98,
+      "bytes_scanned": 0
+    },
+    {
+      "question": "Which state had the highest total amount paid across all years? Give the two-letter code.",
+      "truth": "FL",
+      "passed": true,
+      "answer": "The state with the highest total amount paid across all years is FL (Florida), with a total of $15,876,190,392.65 paid out in flood insurance claims.",
+      "queries": [
+        "SELECT state, SUM(total_paid) AS total_paid_sum\nFROM nfip_claims\nGROUP BY state\nORDER BY total_paid_sum DESC\nLIMIT 1"
+      ],
+      "input_tokens": 2737,
+      "output_tokens": 135,
+      "bytes_scanned": 5875780
+    },
+    {
+      "question": "What was the total amount paid on claims in Texas in 2017, in dollars?",
+      "truth": "9.078567037E9",
+      "passed": true,
+      "answer": "The total amount paid on flood insurance claims in Texas in 2017 was $9,078,567,037.48. This covers all claims with a year of loss of 2017 in the state of Texas.",
+      "queries": [
+        "SELECT SUM(total_paid) AS total_paid_texas_2017 FROM nfip_claims WHERE state = 'TX' AND year_of_loss = 2017"
+      ],
+      "input_tokens": 2732,
+      "output_tokens": 144,
+      "bytes_scanned": 896153
+    },
+    {
+      "question": "Which named flood event has the most claims? Give the event name.",
+      "truth": "Hurricane Sandy",
+      "passed": true,
+      "answer": "The named flood event with the most claims is Hurricane Sandy, with 144,848 claims.",
+      "queries": [
+        "SELECT flood_event, COUNT(*) AS claim_count\nFROM nfip_claims\nWHERE flood_event IS NOT NULL AND flood_event <> ''\nGROUP BY flood_event\nORDER BY claim_count DESC\nLIMIT 1"
+      ],
+      "input_tokens": 2732,
+      "output_tokens": 128,
+      "bytes_scanned": 51380
+    },
+    {
+      "question": "What is the average total paid per claim in Florida, in dollars, for claims where something was paid?",
+      "truth": "94276.0",
+      "passed": true,
+      "answer": "For Florida claims where something was paid (total_paid > 0), the average total paid per claim is $94,276.46. This covers all years available in the dataset (2009 onward).",
+      "queries": [
+        "\nSELECT AVG(total_paid) AS avg_total_paid\nFROM nfip_claims\nWHERE state = 'FL'\n  AND total_paid > 0\n"
+      ],
+      "input_tokens": 2732,
+      "output_tokens": 140,
+      "bytes_scanned": 7585197
+    },
+    {
+      "question": "In which year of loss was the total amount paid the highest?",
+      "truth": "2017",
+      "passed": true,
+      "answer": "The year of loss with the highest total amount paid was 2017, with a total of $10,657,589,993.76 paid out across all claims.",
+      "queries": [
+        "SELECT year_of_loss, SUM(total_paid) AS total_paid_sum FROM nfip_claims GROUP BY year_of_loss ORDER BY total_paid_sum DESC LIMIT 1"
+      ],
+      "input_tokens": 2735,
+      "output_tokens": 137,
+      "bytes_scanned": 5783579
+    },
+    {
+      "question": "How many claims in New Jersey were for a primary residence?",
+      "truth": "64505",
+      "passed": true,
+      "answer": "There were 64,505 claims in New Jersey that were for a primary residence, across all available years in the dataset (2009 onward).",
+      "queries": [
+        "SELECT COUNT(*) AS claim_count FROM nfip_claims WHERE state = 'NJ' AND is_primary_residence = TRUE"
+      ],
+      "input_tokens": 2697,
+      "output_tokens": 118,
+      "bytes_scanned": 226857
+    },
+    {
+      "question": "What percentage of all claims had nothing paid (total paid of zero)? Round to one decimal.",
+      "truth": "19.6",
+      "passed": true,
+      "answer": "Out of 1,022,329 total claims, 200,131 had nothing paid (a total_paid of zero or null), which works out to 19.6% of all claims.",
+      "queries": [
+        "\nSELECT\n  COUNT(*) AS total_claims,\n  SUM(CASE WHEN total_paid = 0 OR total_paid IS NULL THEN 1 ELSE 0 END) AS zero_paid_claims,\n  ROUND(100.0 * SUM(CASE WHEN total_paid = 0 OR total_paid IS NULL THEN 1 ELSE 0 END) / COUNT(*), 1) AS pct_zero_paid\nFROM nfip_claims\n"
+      ],
+      "input_tokens": 2825,
+      "output_tokens": 216,
+      "bytes_scanned": 5783579
+    },
+    {
+      "question": "Which calendar month, as a number from 1 to 12, has the most claims by date of loss?",
+      "truth": "8",
+      "passed": true,
+      "answer": "Month **8** (August) has the most claims by date of loss, with 244,537 claims across all years in the dataset.",
+      "queries": [
+        "SELECT month(date_of_loss) AS month_num, COUNT(*) AS claim_count\nFROM nfip_claims\nGROUP BY month(date_of_loss)\nORDER BY claim_count DESC\nLIMIT 1"
+      ],
+      "input_tokens": 2750,
+      "output_tokens": 137,
+      "bytes_scanned": 742770
+    }
+  ]
+}
