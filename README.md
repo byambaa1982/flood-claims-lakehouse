@@ -13,33 +13,74 @@ that stop a bad load, and a cost limit on every piece.
 
 ## Architecture
 
-```
-OpenFEMA API
-     |
-     |  ingest/download_claims.py      (Python, one folder per year of loss)
-     v
-S3 raw            gzipped JSON Lines
-     |
-     |  glue_jobs/clean_claims.py      (Glue Spark job: type, dedupe, derive)
-     v
-S3 curated        Parquet, partitioned by year_of_loss
-     |
-     |  dbt on Athena                  (staging and mart models, tests)   [planned]
-     v
-Marts             loss by state and year, paid against property value
-     ^
-     |
-Airflow DAG       ingest -> Glue job -> dbt run -> dbt test               [planned]
+```mermaid
+flowchart LR
+    api[("OpenFEMA API<br/>NFIP claims, public")]
 
-Question in English
-     |
-     |  ai/agent.py                    (Claude on Bedrock, one tool: run_sql)
-     v
-ai/sql_guard.py   read-only check, one table, row cap
-     |
-     v
-Athena  ->  rows  ->  Claude  ->  answer, with the SQL it ran
+    subgraph s1["1 · Ingest"]
+        dl["download_claims.py<br/>Python, paged by year of loss<br/>81,000 rows a minute"]
+    end
+
+    subgraph s2["2 · Lake on S3"]
+        raw[("raw<br/>JSON Lines, gzipped<br/>1,022,329 claims, 91 MB")]
+        cur[("curated<br/>Parquet by year_of_loss<br/>18 files, 38 MB")]
+    end
+
+    subgraph s3["3 · Clean"]
+        glue["Glue Spark job<br/>type, dedupe, null bad dates<br/>140 s, about $0.03"]
+    end
+
+    subgraph s4["4 · Serve"]
+        cat["Glue Data Catalog<br/>table nfip_claims<br/>partition projection"]
+        ath["Athena<br/>1 GB scan cap per query"]
+    end
+
+    subgraph s5["5 · Ask in plain English"]
+        q(["Question"])
+        agent["agent.py<br/>Claude on Amazon Bedrock<br/>one tool: run_sql"]
+        guard{{"sql_guard.py<br/>SELECT only, one table,<br/>200 rows"}}
+        ans(["Answer, with the SQL it ran"])
+    end
+
+    subgraph s6["Planned"]
+        dbt["dbt models and tests"]
+        air["Airflow DAG"]
+    end
+
+    api --> dl --> raw --> glue --> cur
+    cur --> cat --> ath
+    q --> agent
+    agent -- "SQL" --> guard
+    guard -- "checked SQL" --> ath
+    ath -- "rows" --> agent
+    agent --> ans
+    ath -.-> dbt
+    air -.-> dl
+    air -.-> glue
+    air -.-> dbt
+
+    classDef source fill:#dcfce7,stroke:#16a34a,color:#052e16
+    classDef compute fill:#fef3c7,stroke:#d97706,color:#451a03
+    classDef store fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef ai fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    classDef guardrail fill:#fee2e2,stroke:#dc2626,color:#450a0a
+    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray: 5 4
+
+    class api,q,ans source
+    class dl,glue compute
+    class raw,cur,cat,ath store
+    class agent ai
+    class guard guardrail
+    class dbt,air planned
 ```
+
+Green is what goes in and comes out, amber is compute, blue is storage and
+query, purple is the model, red is the check the model cannot bypass, and
+dashed grey is not built yet. The numbers are from the first full run.
+
+Everything in blue and amber is created by Terraform (22 resources). GitHub
+Actions runs the unit tests, `terraform fmt` and `terraform validate` on every
+push.
 
 ## Status
 
@@ -89,6 +130,32 @@ Claude gets the table's schema and a single tool, `run_sql`. It writes a
 query, the code checks and runs it, and Claude reads the rows and answers. The
 answer comes back with every query that produced it, so the work can be
 checked.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as You
+    participant A as agent.py
+    participant C as Claude on Bedrock
+    participant G as sql_guard.py
+    participant Q as Athena
+
+    U->>A: Which states had the most paid in 2017?
+    A->>C: question, table schema, run_sql tool
+    C-->>A: tool call with a SELECT
+    A->>G: check the statement
+    alt not a single read-only SELECT on nfip_claims
+        G-->>A: rejected, with the reason
+        A-->>C: error result, so Claude can fix the query
+    else allowed
+        G-->>A: statement wrapped in a 200-row cap
+        A->>Q: run in the scan-capped workgroup
+        Q-->>A: rows and bytes scanned
+        A-->>C: rows as JSON
+    end
+    C-->>A: answer in plain sentences
+    A-->>U: answer, plus every query that ran
+```
 
 The model is not trusted to behave. `ai/sql_guard.py` checks each statement
 before it reaches Athena:
