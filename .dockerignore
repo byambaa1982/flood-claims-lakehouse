@@ -1,0 +1,7 @@
+.venv
+.git
+data
+.env
+terraform
+**/__pycache__
+dbt/target
