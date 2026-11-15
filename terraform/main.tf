@@ -117,14 +117,14 @@ resource "aws_iam_role_policy_attachment" "glue_service" {
 # The job reads raw and scripts, and writes curated. Nothing else.
 data "aws_iam_policy_document" "glue_data" {
   statement {
-    actions = ["s3:GetObject", "s3:ListBucket"]
+    actions   = ["s3:GetObject", "s3:ListBucket"]
     resources = [
       aws_s3_bucket.this["raw"].arn, "${aws_s3_bucket.this["raw"].arn}/*",
       aws_s3_bucket.this["scripts"].arn, "${aws_s3_bucket.this["scripts"].arn}/*",
     ]
   }
   statement {
-    actions = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
     resources = [
       aws_s3_bucket.this["curated"].arn, "${aws_s3_bucket.this["curated"].arn}/*",
     ]
