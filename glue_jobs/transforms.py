@@ -37,6 +37,11 @@ COLUMNS: dict[str, tuple[str, str]] = {
 }
 
 PAID_COLUMNS = ["paid_building", "paid_contents", "paid_icc"]
+DATE_COLUMNS = [name for name, dtype in COLUMNS.values() if dtype == "date"]
+
+# The source holds a few placeholder dates centuries in the past. Nothing in
+# this data can predate 1800, and Parquet cannot store dates before 1582 safely.
+EARLIEST_VALID_DATE = "1800-01-01"
 
 
 def clean_claims(raw: DataFrame) -> DataFrame:
@@ -47,6 +52,7 @@ def clean_claims(raw: DataFrame) -> DataFrame:
     - when the same claim id appears more than once, the row with the latest
       as_of_date wins
     - total_paid adds the three payment columns, treating a missing one as zero
+    - a date before 1800 is a placeholder in the source and becomes null
     """
     missing = [name for name in COLUMNS if name not in raw.columns]
     if missing:
@@ -55,6 +61,10 @@ def clean_claims(raw: DataFrame) -> DataFrame:
     typed = raw.select(
         *[F.col(source).cast(dtype).alias(name) for source, (name, dtype) in COLUMNS.items()]
     )
+    for name in DATE_COLUMNS:
+        typed = typed.withColumn(
+            name, F.when(F.col(name) >= F.lit(EARLIEST_VALID_DATE).cast("date"), F.col(name))
+        )
     valid = typed.where(F.col("claim_id").isNotNull() & F.col("year_of_loss").isNotNull())
 
     latest_first = Window.partitionBy("claim_id").orderBy(F.col("as_of_date").desc_nulls_last())
