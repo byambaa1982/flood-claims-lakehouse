@@ -17,20 +17,20 @@ that stop a bad load, and a cost limit on every piece.
 <table>
   <tr>
     <td align="center" width="110"><img src="docs/icons/python.svg" height="44" alt="Python"><br><sub>Python</sub></td>
-    <td align="center" width="110"><img src="docs/icons/spark.svg" height="44" alt="Apache Spark"><br><sub>Apache Spark</sub></td>
-    <td align="center" width="110"><img src="docs/icons/s3.svg" height="44" alt="Amazon S3"><br><sub>Amazon S3</sub></td>
-    <td align="center" width="110"><img src="docs/icons/glue.svg" height="44" alt="AWS Glue"><br><sub>AWS Glue</sub></td>
-    <td align="center" width="110"><img src="docs/icons/athena.svg" height="44" alt="Amazon Athena"><br><sub>Amazon Athena</sub></td>
+    <td align="center" width="110"><img src="docs/icons/spark.svg" height="44" alt="Apache Spark"><br><sub>Apache&nbsp;Spark</sub></td>
+    <td align="center" width="110"><img src="docs/icons/s3.svg" height="44" alt="Amazon S3"><br><sub>Amazon&nbsp;S3</sub></td>
+    <td align="center" width="110"><img src="docs/icons/glue.svg" height="44" alt="AWS Glue"><br><sub>AWS&nbsp;Glue</sub></td>
+    <td align="center" width="110"><img src="docs/icons/athena.svg" height="44" alt="Amazon Athena"><br><sub>Amazon&nbsp;Athena</sub></td>
     <td align="center" width="110"><img src="docs/icons/dbt.svg" height="44" alt="dbt"><br><sub>dbt</sub></td>
-    <td align="center" width="110"><img src="docs/icons/airflow.svg" height="44" alt="Apache Airflow"><br><sub>Apache Airflow</sub></td>
+    <td align="center" width="110"><img src="docs/icons/airflow.svg" height="44" alt="Apache Airflow"><br><sub>Apache&nbsp;Airflow</sub></td>
   </tr>
   <tr>
     <td align="center" width="110"><img src="docs/icons/fastapi.svg" height="44" alt="FastAPI"><br><sub>FastAPI</sub></td>
-    <td align="center" width="110"><img src="docs/icons/bedrock.svg" height="44" alt="Amazon Bedrock"><br><sub>Amazon Bedrock</sub></td>
+    <td align="center" width="110"><img src="docs/icons/bedrock.svg" height="44" alt="Amazon Bedrock"><br><sub>Amazon&nbsp;Bedrock</sub></td>
     <td align="center" width="110"><img src="docs/icons/claude.svg" height="44" alt="Claude"><br><sub>Claude</sub></td>
     <td align="center" width="110"><img src="docs/icons/terraform.svg" height="44" alt="Terraform"><br><sub>Terraform</sub></td>
     <td align="center" width="110"><img src="docs/icons/docker.svg" height="44" alt="Docker"><br><sub>Docker</sub></td>
-    <td align="center" width="110"><img src="docs/icons/github-actions.svg" height="44" alt="GitHub Actions"><br><sub>GitHub Actions</sub></td>
+    <td align="center" width="110"><img src="docs/icons/github-actions.svg" height="44" alt="GitHub Actions"><br><sub>GitHub&nbsp;Actions</sub></td>
     <td align="center" width="110"><img src="docs/icons/pytest.svg" height="44" alt="pytest"><br><sub>pytest</sub></td>
   </tr>
 </table>
@@ -50,7 +50,7 @@ that stop a bad load, and a cost limit on every piece.
 
 ```mermaid
 flowchart TB
-    air["<b>Airflow DAG</b><br/>runs steps 1 to 3 in order, stops on the first failure<br/>3 min 23 s end to end"]
+    air["<b>Airflow DAG</b><br/>runs steps 1 to 3<br/>3 min 23 s"]
 
     subgraph r1["1 · Ingest"]
         direction LR
