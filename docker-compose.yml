@@ -1,0 +1,15 @@
+# Local Airflow for running the pipeline. Create .env first: scripts/make_env.sh
+services:
+  airflow:
+    build: ./airflow
+    command: standalone
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Local demo only: skip the login screen.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - .:/opt/airflow/project:ro
