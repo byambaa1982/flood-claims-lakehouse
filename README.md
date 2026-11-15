@@ -12,6 +12,40 @@ This is a personal project. I built it to show how I put a pipeline together
 on AWS: infrastructure as code, tested transformations, data quality checks
 that stop a bad load, and a cost limit on every piece.
 
+## Tech stack
+
+<table>
+  <tr>
+    <td align="center" width="110"><img src="docs/icons/python.svg" height="44" alt="Python"><br><sub>Python</sub></td>
+    <td align="center" width="110"><img src="docs/icons/spark.svg" height="44" alt="Apache Spark"><br><sub>Apache Spark</sub></td>
+    <td align="center" width="110"><img src="docs/icons/s3.svg" height="44" alt="Amazon S3"><br><sub>Amazon S3</sub></td>
+    <td align="center" width="110"><img src="docs/icons/glue.svg" height="44" alt="AWS Glue"><br><sub>AWS Glue</sub></td>
+    <td align="center" width="110"><img src="docs/icons/athena.svg" height="44" alt="Amazon Athena"><br><sub>Amazon Athena</sub></td>
+    <td align="center" width="110"><img src="docs/icons/dbt.svg" height="44" alt="dbt"><br><sub>dbt</sub></td>
+    <td align="center" width="110"><img src="docs/icons/airflow.svg" height="44" alt="Apache Airflow"><br><sub>Apache Airflow</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="110"><img src="docs/icons/fastapi.svg" height="44" alt="FastAPI"><br><sub>FastAPI</sub></td>
+    <td align="center" width="110"><img src="docs/icons/bedrock.svg" height="44" alt="Amazon Bedrock"><br><sub>Amazon Bedrock</sub></td>
+    <td align="center" width="110"><img src="docs/icons/claude.svg" height="44" alt="Claude"><br><sub>Claude</sub></td>
+    <td align="center" width="110"><img src="docs/icons/terraform.svg" height="44" alt="Terraform"><br><sub>Terraform</sub></td>
+    <td align="center" width="110"><img src="docs/icons/docker.svg" height="44" alt="Docker"><br><sub>Docker</sub></td>
+    <td align="center" width="110"><img src="docs/icons/github-actions.svg" height="44" alt="GitHub Actions"><br><sub>GitHub Actions</sub></td>
+    <td align="center" width="110"><img src="docs/icons/pytest.svg" height="44" alt="pytest"><br><sub>pytest</sub></td>
+  </tr>
+</table>
+
+| Layer | Tools |
+|---|---|
+| Ingest | Python, the OpenFEMA API |
+| Storage | Amazon S3: gzipped JSON Lines raw, Parquet curated |
+| Processing | AWS Glue running Apache Spark (PySpark) |
+| Query and modelling | Amazon Athena, dbt with 17 data tests |
+| Orchestration | Apache Airflow 3, in Docker |
+| Serving | FastAPI, with an API key and a cache |
+| AI | Claude on Amazon Bedrock, behind a SQL guard |
+| Infrastructure and checks | Terraform, GitHub Actions, pytest |
+
 ## Architecture
 
 ```mermaid
