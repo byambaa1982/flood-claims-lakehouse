@@ -5,7 +5,8 @@ claims. It takes about one million claims from FEMA's National Flood Insurance
 Program, lands them in S3, cleans them with a Glue Spark job, models them with
 dbt on Athena, and runs the whole thing from one Airflow DAG. On top sits a
 question assistant: ask in plain English, and Claude on Amazon Bedrock writes
-the SQL, runs it on Athena and answers with the figures.
+the SQL, runs it on Athena and answers with the figures. A small FastAPI
+service puts the marts and the assistant behind an API key.
 
 This is a personal project. I built it to show how I put a pipeline together
 on AWS: infrastructure as code, tested transformations, data quality checks
@@ -15,6 +16,8 @@ that stop a bad load, and a cost limit on every piece.
 
 ```mermaid
 flowchart TB
+    air["<b>Airflow DAG</b><br/>runs steps 1 to 3 in order, stops on the first failure<br/>3 min 23 s end to end"]
+
     subgraph r1["1 · Ingest"]
         direction LR
         api[("<b>OpenFEMA API</b><br/>public flood<br/>insurance claims")]
@@ -23,7 +26,7 @@ flowchart TB
         api --> dl --> raw
     end
 
-    subgraph r2["2 · Clean and serve"]
+    subgraph r2["2 · Clean"]
         direction LR
         glue["<b>Glue Spark job</b><br/>typed, deduplicated<br/>140 s · about $0.03 a run"]
         cur[("<b>S3 curated</b><br/>Parquet by year of loss<br/>18 files · 38 MB")]
@@ -31,44 +34,48 @@ flowchart TB
         glue --> cur --> ath
     end
 
-    subgraph r3["3 · Ask in plain English"]
+    subgraph r3["3 · Model"]
+        direction LR
+        dbt["<b>dbt on Athena</b><br/>3 models<br/>built and tested in 21 s"]
+        tests{{"<b>17 data tests</b><br/>unique, not null,<br/>totals reconcile"}}
+        marts[("<b>Marts</b><br/>loss by state and year<br/>flood events")]
+        dbt --> tests --> marts
+    end
+
+    subgraph r4["4 · Serve and ask"]
         direction LR
         guard{{"<b>SQL guard</b><br/>SELECT only, one table,<br/>200-row cap"}}
-        agent["<b>Claude on Bedrock</b><br/>agent.py writes the SQL<br/>one tool: run_sql"]
+        agent["<b>Claude on Bedrock</b><br/>writes the SQL<br/>one tool: run_sql"]
+        fast["<b>FastAPI</b><br/>API key, cached marts<br/>2,100 requests a second"]
         you(["<b>You</b><br/>question in,<br/>answer and SQL out"])
         guard <-- "SQL · rows" --> agent
-        agent <--> you
+        agent <--> fast
+        fast <--> you
     end
 
-    subgraph r4["Planned"]
-        direction LR
-        air["<b>Airflow DAG</b><br/>schedule steps 1 and 2"]
-        dbt["<b>dbt on Athena</b><br/>models and tests"]
-        air ~~~ dbt
-    end
-
+    air -.-> r1
     r1 --> r2
-    r2 <-- "checked SQL in · rows out" --> r3
-    r3 ~~~ r4
+    r2 --> r3
+    r3 <-- "checked SQL in · rows out" --> r4
 
     classDef source fill:#dcfce7,stroke:#16a34a,color:#052e16
     classDef compute fill:#fef3c7,stroke:#d97706,color:#451a03
     classDef store fill:#dbeafe,stroke:#2563eb,color:#172554
     classDef ai fill:#ede9fe,stroke:#7c3aed,color:#2e1065
     classDef guardrail fill:#fee2e2,stroke:#dc2626,color:#450a0a
-    classDef planned fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray: 5 4
+    classDef orchestrate fill:#e0f2fe,stroke:#0284c7,color:#082f49
 
     class api,you source
-    class dl,glue compute
-    class raw,cur,ath store
+    class dl,glue,dbt,fast compute
+    class raw,cur,ath,marts store
     class agent ai
-    class guard guardrail
-    class air,dbt planned
+    class guard,tests guardrail
+    class air orchestrate
 ```
 
 Green is what goes in and comes out, amber is compute, blue is storage and
-query, purple is the model, red is the check the model cannot bypass, and
-dashed grey is not built yet. The numbers are from the first full run.
+query, purple is the model, and red marks the checks: the data tests a load
+must pass and the guard the model cannot bypass. Every number is measured.
 
 The S3 buckets, the Glue job, and the Athena table and workgroup are created by
 Terraform (22 resources). GitHub Actions runs the unit tests, `terraform fmt`
@@ -84,9 +91,10 @@ and `terraform validate` on every push.
 | Glue job run on AWS | Working. Full dataset cleaned to Parquet |
 | Athena table over the curated data | Working. Row counts checked against the source |
 | Question assistant (Claude on Bedrock, text to SQL) | Working. 10 of 10 on the evaluation set |
+| dbt models and tests on Athena | Working. 3 models and 17 data tests, all passing |
+| Airflow DAG | Working. Two full runs, both succeeded |
+| FastAPI service | Working. 13 tests, run against live data, load tested |
 | Lake Formation permissions | Planned |
-| dbt models and tests on Athena | Planned |
-| Airflow DAG | Planned |
 
 I update this table as each part is finished. Nothing is marked working until
 I have run it.
@@ -102,6 +110,9 @@ First full run, 15 November 2026, region us-east-2.
 | Curated output | 18 Parquet files, 38 MB, one partition per year of loss |
 | Athena: count and date range over all rows | 0.7 seconds, 12.8 MB scanned |
 | Athena: claims and total paid by state | 0.5 seconds, 5.9 MB scanned |
+| dbt build | 3 models and 17 data tests in 21 seconds |
+| Airflow run, one year reloaded | 3 min 23 s: ingest 7 s, Glue job 2 min 34 s, dbt 39 s |
+| API, cached route | about 2,100 requests a second, p99 26 ms, no errors |
 
 Checks on the output: 1,022,329 rows and 1,022,329 distinct claim ids, the
 same count the API reports; years of loss 2009 to 2026; $52.7 billion paid in
@@ -111,6 +122,94 @@ The first Glue run failed. A small number of claims carry a placeholder
 construction date centuries in the past, which Spark will not write to Parquet.
 The fix is a cleaning rule that turns any date before 1800 into null, with a
 unit test for it.
+
+## Models and data tests (dbt)
+
+`dbt/` holds three models, built on Athena:
+
+| Model | Kind | What it is |
+|---|---|---|
+| `stg_claims` | view | One row per claim, with a paid flag, total damage and damage ratio |
+| `mart_loss_by_state_year` | table | Claims, share paid, total and median paid, by state and year (967 rows) |
+| `mart_flood_events` | table | Claims, states affected and total paid for each named flood event (126 rows) |
+
+Seventeen data tests run with every build. Most are the standard ones: claim
+ids are unique and present, keys are never null. Three are written for this
+data: the state and year mart must add up to the staging model in both claims
+and dollars, the share paid must be between 0 and 1, and a state and year may
+appear only once.
+
+```bash
+export CURATED_BUCKET=<curated_bucket> ATHENA_RESULTS_BUCKET=<athena_results_bucket>
+dbt build --project-dir dbt --profiles-dir dbt
+```
+
+## Orchestration (Airflow)
+
+One DAG, `flood_claims`, runs ingest, the Glue job and `dbt build` in order.
+If a step fails the later ones do not run, so a failed load or a failed data
+test never reaches the marts. The years to reload are a run parameter.
+
+![The Airflow run: ingest, clean and dbt_build all succeeded in 3 min 23 s](docs/airflow_run.jpg)
+
+```bash
+scripts/make_env.sh        # writes .env with temporary AWS credentials and bucket names
+docker compose up -d       # Airflow 3 at http://127.0.0.1:8080
+```
+
+Airflow runs locally in Docker. dbt is installed in its own virtual
+environment inside the image, so its dependencies cannot clash with Airflow's.
+The Glue step starts the job with boto3 and polls until it ends. The DAG is
+set to run monthly; on AWS the same file would run on MWAA, which this project
+does not use because it has a fixed monthly cost.
+
+## HTTP API (FastAPI)
+
+| Route | Returns |
+|---|---|
+| `GET /health` | status; no key needed |
+| `GET /claims/by-state?year=2017` | claims and dollars for each state in one year |
+| `GET /claims/events?limit=10` | the largest named flood events by amount paid |
+| `POST /ask` | a plain-English question answered by the assistant, with its SQL |
+
+```bash
+API_KEY=change-me uvicorn api.main:app
+curl -H "X-API-Key: change-me" "http://127.0.0.1:8000/claims/by-state?year=2017"
+```
+
+- Every route except `/health` needs the `X-API-Key` header. Started without
+  a key configured, the API refuses every request instead of running open.
+- Inputs are typed and bounded. A year that is not an integer from 2009 on
+  never reaches Athena.
+- Mart queries are cached for five minutes; the marts change once a month.
+- An Athena failure comes back as a 502 with the reason, not a 500.
+- `api/Dockerfile` builds a 170 MB image that runs as an unprivileged user.
+
+### Load test
+
+`scripts/load_test.py`, one uvicorn worker, a 12-thread Intel Core i5-12400
+machine running Windows 11, the cached `/claims/by-state` route, 20,000
+requests per run:
+
+| Generators x connections | Requests a second | Median | p99 | Errors |
+|---|---|---|---|---|
+| 1 x 10 | 670 | 8.7 ms | 128 ms | 0 |
+| 2 x 10 | 1,378 | 9.5 ms | 103 ms | 0 |
+| 4 x 10 | 2,103 | 19.9 ms | 26 ms | 0 |
+| 8 x 10 | 1,705 | 47.1 ms | 60 ms | 0 |
+
+The first run looked wrong: 636 requests a second at 10 connections, falling
+to 353 at 200. The health route, which does no work, fell the same way, so the
+route was not the cause. Running two generators side by side doubled the
+total, which showed the limit was the load generator, a single Python process,
+not the API. The script now runs several generators and adds their rates. One
+worker peaks at about 2,100 requests a second and drops past that as it
+saturates.
+
+What the number covers: a cached route on one machine, with the generator on
+the same machine. A cache miss waits on an Athena query, and `/ask`
+waits on the model and on Athena. Those are bounded by AWS, not by this
+service.
 
 ## Ask the data in plain English
 
@@ -218,6 +317,7 @@ pytest -q tests
 
 The question assistant needs AWS credentials and access to an Anthropic model
 on Bedrock. Set `BEDROCK_MODEL_ID` to use a model other than the default.
+dbt runs from its own environment: `pip install dbt-core dbt-athena`.
 
 On Windows, Spark needs a `winutils.exe` and `hadoop.dll` that match its
 Hadoop version before it can read and write local files. The tests do not
@@ -259,6 +359,9 @@ stored in this repository.
 - **Partition projection on the Athena table.** Athena works out the year
   folders from a rule, so a new year of data needs no crawler and no repair
   command.
+- **The marts must reconcile.** A dbt test compares the mart's claims and
+  dollars with the staging model on every build; a join or filter that drops
+  rows fails the run.
 - **Duplicates resolve to the latest `asOfDate`.** FEMA republishes claims as
   they are updated; the newest version of a claim wins.
 

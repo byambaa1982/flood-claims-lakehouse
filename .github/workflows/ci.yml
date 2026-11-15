@@ -21,6 +21,21 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest -q tests
 
+  dbt:
+    runs-on: ubuntu-latest
+    env:
+      CURATED_BUCKET: placeholder
+      ATHENA_RESULTS_BUCKET: placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install dbt-core==1.12.7 dbt-athena==1.11.1
+      # Parses every model and test without connecting to AWS.
+      - run: dbt parse --project-dir dbt --profiles-dir dbt
+
   terraform:
     runs-on: ubuntu-latest
     steps:
