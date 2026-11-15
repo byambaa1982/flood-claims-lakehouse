@@ -1,0 +1,16 @@
+name: flood_claims
+version: "1.0.0"
+profile: flood_claims
+
+model-paths: ["models"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  flood_claims:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+      +format: parquet

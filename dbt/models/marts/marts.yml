@@ -1,0 +1,22 @@
+version: 2
+
+models:
+  - name: mart_loss_by_state_year
+    description: Claim counts and dollars by state and year of loss.
+    columns:
+      - name: state
+        data_tests: [not_null]
+      - name: year_of_loss
+        data_tests: [not_null]
+      - name: claims
+        data_tests: [not_null]
+      - name: share_paid
+        description: Share of claims with a payment, from 0 to 1.
+
+  - name: mart_flood_events
+    description: Claims and dollars for each flood event FEMA named.
+    columns:
+      - name: flood_event
+        data_tests: [not_null, unique]
+      - name: claims
+        data_tests: [not_null]

@@ -39,7 +39,6 @@ derby.log
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
-dbt/profiles.yml
 
 # Airflow
 airflow/logs/
@@ -53,3 +52,4 @@ Thumbs.db
 # Saved Terraform plans can contain sensitive values
 tfplan
 *.tfplan
+dbt/.user.yml

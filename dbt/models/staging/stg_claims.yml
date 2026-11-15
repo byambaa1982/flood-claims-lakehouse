@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: stg_claims
+    description: Claims with a known state, plus paid flag, total damage and damage ratio.
+    columns:
+      - name: claim_id
+        data_tests: [not_null, unique]
+      - name: state
+        data_tests: [not_null]
+      - name: total_paid
+        description: Dollars paid on the claim, building plus contents plus ICC.
+        data_tests: [not_null]
+      - name: was_paid
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false

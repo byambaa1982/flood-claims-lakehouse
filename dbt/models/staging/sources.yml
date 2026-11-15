@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: curated
+    description: Cleaned claims written by the Glue job, one Parquet partition per year of loss.
+    database: awsdatacatalog
+    schema: flood_claims_lakehouse_curated
+    tables:
+      - name: nfip_claims
+        description: One row per NFIP flood insurance claim.
+        columns:
+          - name: claim_id
+            description: FEMA's id for the claim.
+            data_tests:
+              - not_null
+              - unique
+          - name: year_of_loss
+            data_tests:
+              - not_null
